@@ -179,6 +179,18 @@ public class ReplayWorkloadScheduledMulti extends Workload
 	boolean ascache;
 
 	/**
+	 * The name of the property that sets the simulated backend/storage lookup latency
+	 */
+	public static final String BACKEND_LATENCY_PROPERTY="backendlatencyms";
+
+	/**
+	 * The default value for the backendlatencyms property.
+	 */
+	public static final String BACKEND_LATENCY_PROPERTY_DEFAULT="0";
+	
+	long backendlatencyms;
+
+	/**
 	 * The name of the property for deciding if use the timestamp/delays from the tracefile, default is false.
 	 */
 	public static final String WITH_TIMESTAMP_PROPERTY="withtimestamp";
@@ -515,6 +527,7 @@ public class ReplayWorkloadScheduledMulti extends Workload
 
 		// Properties for cache behaviour and for using timestamp from tracefile
 		ascache=Boolean.parseBoolean(p.getProperty(AS_CACHE_PROPERTY,AS_CACHE_PROPERTY_DEFAULT));
+		backendlatencyms=Long.parseLong(p.getProperty(BACKEND_LATENCY_PROPERTY,BACKEND_LATENCY_PROPERTY_DEFAULT));
 		withtimestamp=Boolean.parseBoolean(p.getProperty(WITH_TIMESTAMP_PROPERTY,WITH_TIMESTAMP_PROPERTY_DEFAULT));
 		timestampfactor=Integer.parseInt(p.getProperty(TIMESTAMP_FACTOR_PROPERTY,TIMESTAMP_FACTOR_PROPERTY_DEFAULT));
 		instances=Integer.parseInt(p.getProperty(INSTANCES_PROPERTY,INSTANCES_PROPERTY_DEFAULT));
@@ -974,7 +987,21 @@ public class ReplayWorkloadScheduledMulti extends Workload
     		if (ascache && cells.isEmpty()) {
                     //System.out.println(keyname);
                     //System.out.println(fieldSize);
+					if (backendlatencyms > 0) {
+						final long missDetectedNanos = System.nanoTime();
+                        final DB fdb = db;
+                        final String fkeyname = keyname;
+                        final int ffieldSize = fieldSize;
+                        scheduler.schedule(new Runnable() {
+                            public void run() {
+                                long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+                                Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+                                doTransactionInsert(fdb, fkeyname, ffieldSize);
+                            }
+                        }, backendlatencyms, TimeUnit.MILLISECONDS);
+                    } else {
 		   doTransactionInsert(db,keyname, fieldSize);
+					}
     		}
 
     		if (dataintegrity) {
