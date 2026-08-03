@@ -191,6 +191,12 @@ public class ReplayWorkloadScheduledMulti extends Workload
 	long backendlatencyms;
 
 	/**
+	 * Counts backend-latency callbacks that have been scheduled but not yet completed
+	*/ 
+	private final java.util.concurrent.atomic.AtomicInteger pendingBackendTasks =
+		new java.util.concurrent.atomic.AtomicInteger(0);
+
+	/**
 	 * The name of the property for deciding if use the timestamp/delays from the tracefile, default is false.
 	 */
 	public static final String WITH_TIMESTAMP_PROPERTY="withtimestamp";
@@ -893,6 +899,21 @@ public class ReplayWorkloadScheduledMulti extends Workload
 
 	/* Method to run a shutdown for the scheduler */
 	public void shutdownScheduler() {
+		int stableChecks = 0;
+		while (stableChecks < 2) {
+			if (((java.util.concurrent.ScheduledThreadPoolExecutor) scheduler).getQueue().isEmpty() 
+				&& pendingBackendTasks.get() == 0) {
+					stableChecks++;
+			} else {
+				stableChecks = 0;
+			}
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+		}
 		scheduler.shutdown();
  	}
 
@@ -984,24 +1005,39 @@ public class ReplayWorkloadScheduledMulti extends Workload
 		db.read(table,keyname,fields,cells);
 
 		// EBG - 07/12/2015 - If working AS_CACHE and get result is empty, Insert the record. 
-    		if (ascache && cells.isEmpty()) {
-                    //System.out.println(keyname);
-                    //System.out.println(fieldSize);
-					if (backendlatencyms > 0) {
-						final long missDetectedNanos = System.nanoTime();
+		if (ascache && cells.isEmpty()) {
+                    if (backendlatencyms > 0) {
+                        final long missDetectedNanos = System.nanoTime();
                         final DB fdb = db;
                         final String fkeyname = keyname;
                         final int ffieldSize = fieldSize;
-                        scheduler.schedule(new Runnable() {
-                            public void run() {
-                                long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
-                                Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
-                                doTransactionInsert(fdb, fkeyname, ffieldSize);
+                        pendingBackendTasks.incrementAndGet();
+                        try {
+                            scheduler.schedule(new Runnable() {
+                                public void run() {
+                                    try {
+                                        long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+                                        Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+                                        doTransactionInsert(fdb, fkeyname, ffieldSize);
+                                    } finally {
+                                        pendingBackendTasks.decrementAndGet();
+                                    }
+                                }
+                            }, backendlatencyms, TimeUnit.MILLISECONDS);
+                        } catch (java.util.concurrent.RejectedExecutionException e) {
+                            try {
+                                Thread.sleep(backendlatencyms);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
                             }
-                        }, backendlatencyms, TimeUnit.MILLISECONDS);
+                            long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+                            Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+                            doTransactionInsert(fdb, fkeyname, ffieldSize);
+                            pendingBackendTasks.decrementAndGet();
+                        }
                     } else {
-		   doTransactionInsert(db,keyname, fieldSize);
-					}
+		        doTransactionInsert(db,keyname, fieldSize);
+                    }
     		}
 
     		if (dataintegrity) {
