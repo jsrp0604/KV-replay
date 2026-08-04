@@ -74,38 +74,38 @@ OPTIONS = {
 }
 
 def usage():
-    output = io.BytesIO()
-    print >> output, "%s command database [options]" % sys.argv[0]
+    output = io.StringIO()
+    print("%s command database [options]" % sys.argv[0], file=output)
 
-    print >> output, "\nCommands:"
+    print("\nCommands:", file=output)
     for command in sorted(COMMANDS.keys()):
-        print >> output, "    %s %s" % (command.ljust(14),
-                                        COMMANDS[command]["description"])
+        print("    %s %s" % (command.ljust(14),
+                              COMMANDS[command]["description"]), file=output)
 
-    print >> output, "\nDatabases:"
+    print("\nDatabases:", file=output)
     for db in sorted(DATABASES.keys()):
-        print >> output, "    %s %s" % (db.ljust(14), BASE_URL +
-                                        db.split("-")[0])
+        print("    %s %s" % (db.ljust(14), BASE_URL +
+                              db.split("-")[0]), file=output)
 
-    print >> output, "\nOptions:"
+    print("\nOptions:", file=output)
     for option in sorted(OPTIONS.keys()):
-        print >> output, "    %s %s" % (option.ljust(14), OPTIONS[option])
+        print("    %s %s" % (option.ljust(14), OPTIONS[option]), file=output)
 
-    print >> output, """\nWorkload Files:
+    print("""\nWorkload Files:
     There are various predefined workloads under workloads/ directory.
     See https://github.com/brianfrankcooper/YCSB/wiki/Core-Properties
-    for the list of workload properties."""
+    for the list of workload properties.""", file=output)
 
     return output.getvalue()
 
 def debug(message):
-    print >> sys.stderr, "[DEBUG] ", message
+    print("[DEBUG] ", message, file=sys.stderr)
 
 def warn(message):
-    print >> sys.stderr, "[WARN] ", message
+    print("[WARN] ", message, file=sys.stderr)
 
 def error(message):
-    print >> sys.stderr, "[ERROR] ", message
+    print("[ERROR] ", message, file=sys.stderr)
 
 def find_jars(dir, glob='*.jar'):
     jars = []
@@ -137,18 +137,19 @@ def get_classpath_from_maven(database):
                                               "-am", "package", "-DskipTests",
                                               "dependency:build-classpath",
                                               "-DincludeScope=compile",
-                                              "-Dmdep.outputFilterFile=true"])
+                                              "-Dmdep.outputFilterFile=true"],
+                                              universal_newlines=True)
         # the above outputs a "classpath=/path/tojar:/path/to/other/jar" for each module
         # the last module will be the datastore binding
         line = [x for x in mvn_output.splitlines() if x.startswith("classpath=")][-1:]
         return line[0][len("classpath="):]
-    except subprocess.CalledProcessError, err:
+    except subprocess.CalledProcessError as err:
         error("Attempting to generate a classpath from Maven failed "
               "with return code '" + str(err.returncode) + "'. The output from "
               "Maven follows, try running "
               "'mvn -DskipTests package dependency:build=classpath' on your "
               "own and correct errors." + os.linesep + os.linesep + "mvn output:" + os.linesep
-              + err.output)
+              + (err.output or ""))
         sys.exit(err.returncode)
 
 def main():
@@ -209,7 +210,7 @@ def main():
                      main_classname, "-db", db_classname] + remaining)
     if command:
         ycsb_command.append(command)
-    print >> sys.stderr, " ".join(ycsb_command)
+    print(" ".join(ycsb_command), file=sys.stderr)
     return subprocess.call(ycsb_command)
 
 
