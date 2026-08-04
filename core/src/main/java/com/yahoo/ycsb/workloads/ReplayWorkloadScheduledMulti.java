@@ -1016,9 +1016,14 @@ public class ReplayWorkloadScheduledMulti extends Workload
                             scheduler.schedule(new Runnable() {
                                 public void run() {
                                     try {
-                                        long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
-                                        Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
-                                        doTransactionInsert(fdb, fkeyname, ffieldSize);
+										long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+										Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+										try {
+											doTransactionInsert(fdb, fkeyname, ffieldSize);
+										} catch (RuntimeException insertEx) {
+											System.err.println("Write-back INSERT failed for key=" + fkeyname + ": " + insertEx);
+											insertEx.printStackTrace();
+										}
                                     } finally {
                                         pendingBackendTasks.decrementAndGet();
                                     }
@@ -1030,10 +1035,15 @@ public class ReplayWorkloadScheduledMulti extends Workload
                             } catch (InterruptedException ie) {
                                 Thread.currentThread().interrupt();
                             }
-                            long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
-                            Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
-                            doTransactionInsert(fdb, fkeyname, ffieldSize);
-                            pendingBackendTasks.decrementAndGet();
+							long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+							Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+							try {
+								doTransactionInsert(fdb, fkeyname, ffieldSize);
+							} catch (RuntimeException insertEx) {
+								System.err.println("Write-back INSERT failed for key=" + fkeyname + ": " + insertEx);
+								insertEx.printStackTrace();
+							}
+							pendingBackendTasks.decrementAndGet();
                         }
                     } else {
 		        doTransactionInsert(db,keyname, fieldSize);
