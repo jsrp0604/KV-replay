@@ -171,9 +171,22 @@ public class ReplayWorkload extends Workload
 	/**
 	 * The default value for the ascache property.
 	 */
+
 	public static final String AS_CACHE_PROPERTY_DEFAULT="false";
 
 	boolean ascache;
+
+	/**
+	 * The name of the property that sets the simulated backend/storage lookup latency
+	 */
+	public static final String BACKEND_LATENCY_PROPERTY="backendlatencyms";
+
+	/**
+	 * The default value for the backendlatencyms property.
+	 */
+	public static final String BACKEND_LATENCY_PROPERTY_DEFAULT="0";
+
+	long backendlatencyms;
 
 	/**
 	 * The name of the property for deciding if use the timestamp/delays from the tracefile, default is false.
@@ -453,6 +466,7 @@ public class ReplayWorkload extends Workload
 		// EBG - 2016-06-04
 		// Properties for cache behaviour and for using timestamp from tracefile
 		ascache=Boolean.parseBoolean(p.getProperty(AS_CACHE_PROPERTY,AS_CACHE_PROPERTY_DEFAULT));
+		backendlatencyms=Long.parseLong(p.getProperty(BACKEND_LATENCY_PROPERTY,BACKEND_LATENCY_PROPERTY_DEFAULT));
 		withtimestamp=Boolean.parseBoolean(p.getProperty(WITH_TIMESTAMP_PROPERTY,WITH_TIMESTAMP_PROPERTY_DEFAULT));
 		withsleep=Boolean.parseBoolean(p.getProperty(WITH_SLEEP_PROPERTY,WITH_SLEEP_PROPERTY_DEFAULT));
 		
@@ -828,6 +842,16 @@ public class ReplayWorkload extends Workload
 		// EBG - 07/12/2015 - If working AS_CACHE and get result is empty, Insert the record. 
     		if (ascache && cells.isEmpty()) {
                     //modificado jose viteri 16/11/16
+                    if (backendlatencyms > 0) {
+                        long missDetectedNanos = System.nanoTime();
+                        try {
+                            Thread.sleep(backendlatencyms);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                        long backendElapsedMs = (System.nanoTime() - missDetectedNanos) / 1000000L;
+                        Measurements.getMeasurements().measure("BACKENDLATENCY", (int) backendElapsedMs);
+                    }
 		   doTransactionInsert(db,keyname, fieldSize);
     		}
 
