@@ -1,5 +1,5 @@
 workload=com.yahoo.ycsb.workloads.ReplayWorkloadScheduledMulti
-tracefile=/users/jsrp0604/traces/meta_kv_test.dat
+tracefile=/users/jsrp0604/traces/meta_kv_subset.dat
 ascache=true
 sizefromtrace=false
 operationcount=1000000
